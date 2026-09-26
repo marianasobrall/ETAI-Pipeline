@@ -57,3 +57,14 @@ Logistic Regression — train accuracy: 0.679, test accuracy: 0.677
 
 Best Model: Logistic Regression. The Decision Tree has a higher train accuracy, but that's because it is overfitting, the large gap between train and test accuracy shows it memorized the training data instead of actually learning, while Logistic Regression generalizes better and achieves a higher test accuracy.
 
+Week 3:
+Decision Tree — train accuracy: 0.792, test accuracy: 0.611
+Logistic Regression — train accuracy: 0.673, test accuracy: 0.665
+
+Before and after cleaning:
+Decision Tree: train accuracy dropped from 0.829 to 0.792, and test accuracy dropped from 0.629 to 0.611. The gap did shrink (from +0.201 to +0.181), so the cleaning pipeline reduced overfitting a bit, but the tree is still  memorizing the training data rather than generalizing.
+
+Logistic Regression: both train and test accuracy dropped slightly (0.679 → 0.673 train, 0.677 → 0.665 test), and the gap stayed small (+0.008). The drop is minor and the model generalizes well, the slightly lower numbers probably reflect fewer rows being thrown away for encoding as missing/invalid, which changes the exact split slightly, rather than the model getting worse at the task.
+
+Best Model: Logistic Regression. The Decision Tree still overfits badly even after cleaning — its train/test gap (+0.181) is more than 20x the Logistic Regression's (+0.008) — while Logistic Regression keeps a small gap and a higher test accuracy (0.665 vs 0.611).
+
