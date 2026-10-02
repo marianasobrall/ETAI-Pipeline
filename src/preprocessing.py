@@ -1,6 +1,12 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+
 
 def clean_dataset(df: pd.DataFrame, diagnostics_config: dict) -> pd.DataFrame:
     df = df.copy()
@@ -43,25 +49,34 @@ def add_missingness_indicators(df:pd.DataFrame, mnar_indicator_sources: list) ->
             df[f"{col}_was_missing"] = df[col].isna().astype(int)
     return df
 
-def impute_missing(X_train, X_test, numeric_features, categorical_features, numeric_strategy, categorical_strategy):
-    X_train = X_train.copy()
-    X_test = X_test.copy()
 
-    for col in numeric_features:
-        if col in X_train.columns:
-            fill_value = X_train[col].median() if numeric_strategy == "median" else X_train[col].mean()
-            X_train[col]= X_train[col].fillna(fill_value)
-            X_test[col] = X_test[col].fillna(fill_value)
+def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
+    numeric_features = preprocessing_config["numeric_features"]
+    categorical_features = preprocessing_config["categorical_features"]
+    mnar_indicator_sources = preprocessing_config.get("mnar_indicator_sources", [])
+    numeric_strategy = preprocessing_config["imputation"]["numeric_strategy"]
+    categorical_strategy = preprocessing_config["imputation"]["categorical_strategy"]
 
-    for col in categorical_features:
-        if col in X_train.columns:
-            fill_value = X_train[col].mode(dropna=True).iloc[0]
-            X_train[col] = X_train[col].fillna(fill_value)
-            X_test[col] = X_test[col].fillna(fill_value)
+    numeric_pipeline = Pipeline([
+        ("impute", SimpleImputer(strategy=numeric_strategy)),
+        ("scale", StandardScaler()),
+    ])
+    categorical_pipeline = Pipeline([
+        ("impute", SimpleImputer(strategy=categorical_strategy)),
+        ("encode", OneHotEncoder(handle_unknown="ignore", drop="first")),
+    ])
 
-    return X_train, X_test
+    indicator_cols = [f"{c}_was_missing" for c in mnar_indicator_sources]
 
-def preprocess(df: pd.DataFrame, config:dict):
+    return ColumnTransformer([
+        ("numeric", numeric_pipeline, numeric_features),
+        ("categorical", categorical_pipeline, categorical_features),
+        ("indicators", "passthrough", indicator_cols),
+    ])
+
+
+
+def clean_and_split(df: pd.DataFrame, config: dict):
     data_config = config["data"]
     diag_config = config["diagnostics"]
     preprocessing_config = config["preprocessing"]
@@ -75,29 +90,15 @@ def preprocess(df: pd.DataFrame, config:dict):
     columns_to_exclude = [data_config["target"], data_config["sensitive_attr"]] + [
         c for c in data_config.get("drop_columns", []) if c in df.columns
     ]
-
     X = df.drop(columns=columns_to_exclude)
 
     X_train, X_test, y_train, y_test, extras_train, extras_test = train_test_split(
-        X, y, extras, 
+        X, y, extras,
         test_size=config["split"]["test_size"],
         random_state=config["split"]["random_state"],
         stratify=y,
     )
 
-    X_train, X_test = impute_missing(
-        X_train, X_test,
-        numeric_features=preprocessing_config.get("numeric_features"),
-        categorical_features=preprocessing_config.get("categorical_features"),  
-        numeric_strategy=preprocessing_config["imputation"]["numeric_strategy"],
-        categorical_strategy=preprocessing_config["imputation"]["categorical_strategy"]
-        )
-        
-
-
-    # one-hot encode all non-numeric columns, no further thought
-    X_train = pd.get_dummies(X_train, drop_first=True)
-    X_test = pd.get_dummies(X_test, drop_first=True).reindex(columns=X_train.columns, fill_value=0)
-
-
     return X_train, X_test, y_train, y_test, extras_test
+
+
