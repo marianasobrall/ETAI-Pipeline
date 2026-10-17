@@ -53,18 +53,18 @@ See `data/README.md`.
 # Analysis
 ## Week 2
 
-**Decision Tree** — train accuracy: 0.829, test accuracy: 0.629
-**Logistic Regression** — train accuracy: 0.679, test accuracy: 0.677
+**Decision Tree** - train accuracy: 0.829, test accuracy: 0.629
+**Logistic Regression** - train accuracy: 0.679, test accuracy: 0.677
 
 **Best Model:** Logistic Regression. The Decision Tree has a higher train accuracy, but
-that's because it is overfitting — the large gap between train and test accuracy shows
-it memorized the training data instead of actually learning, while Logistic Regression
+that's because it is overfitting - the gap between train and test accuracy shows
+it memorized the training data instead of  learning, while Logistic Regression
 generalizes better and achieves a higher test accuracy.
 
 ## Week 3
 
-- **Decision Tree** — train accuracy: 0.792, test accuracy: 0.611
-- **Logistic Regression** — train accuracy: 0.673, test accuracy: 0.665
+- **Decision Tree** - train accuracy: 0.792, test accuracy: 0.611
+- **Logistic Regression** - train accuracy: 0.673, test accuracy: 0.665
 
 **Before vs after cleaning:**
 - *Decision Tree*: train accuracy dropped from 0.829 to 0.792, test accuracy dropped
@@ -72,13 +72,13 @@ generalizes better and achieves a higher test accuracy.
   overfitting a bit, but the tree still memorizes training data more than it generalizes.
 - *Logistic Regression*: both train and test accuracy dropped slightly (0.679 → 0.673
   train, 0.677 → 0.665 test), and the gap stayed small (+0.008). The drop is minor and
-  the model still generalizes well — likely reflects fewer rows being thrown away as
+  the model still generalizes well - likely reflects fewer rows being thrown away as
   missing/invalid, changing the exact split slightly, rather than the model getting
   worse at the task.
 
 **Best Model:** Logistic Regression. The Decision Tree still overfits badly even after
-cleaning — its train/test gap (+0.181) is more than 20x Logistic Regression's (+0.008)
-— while Logistic Regression keeps a small gap and a higher test accuracy (0.665 vs 0.611).
+cleaning - its train/test gap (+0.181) is more than 20x Logistic Regression's (+0.008)
+- while Logistic Regression keeps a small gap and a higher test accuracy (0.665 vs 0.611).
 
 ## Week 4
 
@@ -89,18 +89,39 @@ cleaning — its train/test gap (+0.181) is more than 20x Logistic Regression's 
 | Random Forest (new) | 0.633 | 0.627 (0.009) |
 | Dummy (new, baseline) | 0.550 | 0.549 (0.000) |
 
-**Week 3 vs Week 4:** LR and DT numbers are basically unchanged — moving preprocessing
+**Week 3 vs Week 4:** LR and DT numbers are basically unchanged - moving preprocessing
 into a `Pipeline` didn't change the results, just unlocked CV.
 
 **Holdout vs CV:** all three real models land within ~1pp of their holdout score, with
 low std — confirms the single holdout number was trustworthy, not lucky.
 
 **New models:** Dummy just predicts the majority class every time, no features involved
-— that's the 0.550 floor, and every real model clears it without much effort. Random
+- that's the 0.550 floor, and every real model clears it without much effort. Random
 Forest is a bunch of Decision Trees trained on random subsets, votes averaged out,
 which is why its gap (+0.158) is smaller than one tree alone (+0.180) and both its
 scores come in higher.
 
-**Best Model:** Logistic Regression — highest test accuracy, smallest gap. Random
+**Best Model:** Logistic Regression - highest test accuracy, smallest gap. Random
 Forest is the best of the tree-based models, but still behind LR, and its FPR gap by
 race (0.36 vs 0.24) is actually a bit worse than LR or DT.
+
+
+## Week 5
+### Ensembles
+
+| Model | CV mean ± std | Gap (train − test) |
+|---|---|---|
+| Logistic regression | 0.670 ± 0.015 | +0.008 |
+| Decision tree | 0.619 ± 0.010 | +0.180 |
+| Random forest | 0.629 ± 0.006 | +0.153 |
+| Random forest (min_samples_leaf=20) | 0.679 ± 0.009 | +0.018 |
+| Oblique random forest | 0.638 ± 0.007 | +0.145 |
+| AdaBoost (stumps) | 0.680 ± 0.009 | +0.011 |
+
+Note: the pruned random forest row was computed with shuffled folds, so it is not exactly comparable with the others.
+
+AdaBoost has the best CV mean (0.680), but the difference to logistic regression is smaller than the std, so it is a tie. The forests with deep trees overfit (gaps around +0.15), while AdaBoost uses stumps and doesn't. Limiting leaf size took the random forest from 0.629 to 0.679, a bigger gain than any feature tried. The oblique forest is a bit better than the normal one, but within one std.
+
+### Feature engineering
+
+Seven features were added one at a time and compared on the same 5 folds. They are fixed formulas, so they are built before the split. None improved any model by more than the std. The best was priors × young, +0.0016 on the random forest, which is noise. Most of the signal is already in age and prior count, so combining them adds little. The original features were kept.

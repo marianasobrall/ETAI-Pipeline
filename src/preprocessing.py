@@ -75,6 +75,27 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     ])
 
 
+def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    adult_years = (out["age"] - 17).clip(lower=1)
+    known_priors = out["priors_count"].notna()
+
+    out["priors_per_adult_year"] = out["priors_count"] / adult_years
+    out["log_priors"] = np.log1p(out["priors_count"])
+    out["has_priors"] = (out["priors_count"] > 0).astype(float).where(known_priors)
+    out["has_juv_felony"] = (out["juv_fel_count"] > 0).astype(float).where(out["juv_fel_count"].notna())
+    out["young_felony"] = ((out["age"] < 25) & (out["c_charge_degree"] == "F")).astype(float) \
+        .where(out["age"].notna() & out["c_charge_degree"].notna())
+
+    # share of juvenile offenses that were felonies (0 if no juvenile record): severity, not volume
+    juv_total = out[["juv_fel_count", "juv_misd_count", "juv_other_count"]].sum(axis=1, min_count=3)
+    out["juv_felony_share"] = (out["juv_fel_count"] / juv_total).where(juv_total != 0, 0.0)
+
+    # many priors while young: an interaction a linear model or a stump can't build on its own
+    young = out["age"] < 25
+    out["priors_x_young"] = (out["priors_count"] * young.astype(float)) \
+        .where(out["age"].notna() & out["priors_count"].notna())
+    return out
 
 def clean_and_split(df: pd.DataFrame, config: dict):
     data_config = config["data"]
@@ -83,6 +104,7 @@ def clean_and_split(df: pd.DataFrame, config: dict):
 
     df = clean_dataset(df, diag_config)
     df = add_missingness_indicators(df, preprocessing_config.get("mnar_indicator_sources", []))
+    df = add_engineered_features(df)
 
     y = df[data_config["target"]]
     extras = df[[data_config["sensitive_attr"], "score_text"]].copy()

@@ -8,7 +8,6 @@ This orchestrates the full (deliberately simple) pipeline:
     load config -> load data -> preprocess -> split -> train
     -> evaluate (train & test) -> save results
 """
-
 import yaml
 
 from src.data import load_data
@@ -17,11 +16,14 @@ from src.model import build_model
 from src.evaluate import evaluate, fairness_report
 from src.results import save_run
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import cross_val_score
+import copy
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 def load_config(path: str = "config.yaml") -> dict:
     with open(path, "r") as f:
         return yaml.safe_load(f)
+
+    
 
 
 def main():
