@@ -14,11 +14,12 @@ assessment algorithm actually used by US courts to help inform bail and sentenci
 ├── requirements.txt
 ├── src/
 │   ├── data.py             # loading
-│   ├── preprocessing.py    # cleaning + train/test split
-│   ├── model.py             # model construction
-│   ├── evaluate.py         # accuracy metrics + fairness check
-│   └── results.py          # saves each run's report to disk
-├── results/                # created automatically -- one file per run (not tracked in git)
+│   ├── preprocessing.py    # cleaning, features/target, locked dev/test split, preprocessor
+│   ├── model.py            # model registry + build_pipeline (prep + model)
+│   ├── evaluate.py         # scorers, CV with out-of-fold probabilities, reports, fairness, paired t-test
+│   ├── tuning.py           # Optuna tuning + nested CV
+│   └── results.py          # run report (.txt) + scoreboard (runs.csv)
+├── results/                # created automatically -- run_<id>.txt per run + runs.csv scoreboard (not tracked in git)
 └── data/
     ├── compas_two_year_recidivism.csv
     └── README.md            # problem description + full data dictionary
@@ -44,6 +45,9 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
+Set `model.type` (and its `params`) in `config.yaml` to choose the model, and `tuning.enabled` to
+turn Optuna + nested CV on or off. Each run prints every metric, adds one row to
+`results/runs.csv` and prints the scoreboard. The locked test set is never used.
 
 ## Dataset
 
@@ -125,3 +129,30 @@ AdaBoost has the best CV mean (0.680), but the difference to logistic regression
 ### Feature engineering
 
 Seven features were added one at a time and compared on the same 5 folds. They are fixed formulas, so they are built before the split. None improved any model by more than the std. The best was priors × young, +0.0016 on the random forest, which is noise. Most of the signal is already in age and prior count, so combining them adds little. The original features were kept.
+
+## Week 6 and 7
+
+ROC-AUC, same 5 folds for every model. *Tuned* = nested CV with Optuna (30 trials).
+
+| Model | Untuned | Tuned mean ± std |
+|---|---|---|
+| HistGradientBoosting (new) | 0.717 | 0.728 ± 0.016 |
+| Gradient boosting (new) | 0.727 | 0.728 ± 0.014 |
+| AdaBoost | 0.723 | 0.727 ± 0.015 |
+| Oblique random forest | 0.683 | 0.726 ± 0.014 |
+| Random forest | 0.683 | 0.725 ± 0.015 |
+| Logistic regression | 0.718 | 0.718 ± 0.014 |
+| Decision tree | 0.608 | 0.717 ± 0.017 |
+| Naive Bayes (new) | 0.685 | 0.710 ± 0.012 |
+| Dummy | 0.500 | - |
+
+**Why ROC-AUC:** COMPAS is used to rank people by risk, and ROC-AUC measures exactly
+that without picking a 0.5 threshold. It is also less noisy than accuracy.
+
+**Tuning:** helped most where the defaults overfit - decision tree +0.109, forests +0.04.
+Tuning picked large `min_samples_leaf` values, i.e. it mostly stopped the trees from
+memorizing. The boosting models were already good with default settings.
+
+**Best Model:** HistGradientBoosting (0.728), but the five ensembles are within 0.003 of
+each other, much less than the std, so it is a tie. The paired t-test confirms it beats
+logistic regression (p = 0.02), the decision tree and Naive Bayes, but not the other ensembles.
