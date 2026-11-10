@@ -1,0 +1,2 @@
+run,data,model,tuned,encoder,scaler,params,tuned_params,metric,mean,std,untuned,floor,fold_1,fold_2,fold_3,fold_4,fold_5
+20261110_160919,data/adult_train.csv,hist_gradient_boosting,True,target,robust,{'random_state': 42},"{'model__max_iter': 84, 'model__learning_rate': 0.08503486364242795, 'model__max_leaf_nodes': 5, 'model__min_samples_leaf': 95, 'model__l2_regularization': 0.006894595952388279}",roc_auc,0.9061974153182589,0.013589097502619914,0.8994018912797109,0.5,0.9096410372821822,0.9058963668850506,0.9240381179273378,0.8860035735556879,0.9054079809410363

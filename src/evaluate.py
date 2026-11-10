@@ -105,9 +105,8 @@ def fairness_report(y, proba, extras: pd.DataFrame, sensitive_attr: str = "race"
 
     lines = [
         f"Error rates by {sensitive_attr}",
-        "FPR = share of people who did NOT reoffend, but were predicted to",
-        "FNR = share of people who did reoffend, but were predicted not to",
-        "",
+                "FPR = share of true negatives (class 0) predicted as positive",
+        "FNR = share of true positives (class 1) predicted as negative",
     ]
     for label, col in columns:
         lines.append(f"  {label}:")

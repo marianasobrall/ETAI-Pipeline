@@ -62,13 +62,13 @@ def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_so
     df = add_missingness_indicators(df, mnar_indicator_sources)
     target, sensitive_attr = data_config["target"], data_config["sensitive_attr"]
 
-    y = df[target].astype(int)
+    y = df[target].astype(int) if target in df.columns else None   # no target in data to predict
     extras = df[[c for c in [sensitive_attr, "score_text"] if c in df.columns]].copy()
 
     columns_to_exclude = [target, sensitive_attr] + [
         c for c in data_config.get("drop_columns", []) if c in df.columns
     ]
-    X = df.drop(columns=columns_to_exclude)
+    X = df.drop(columns=columns_to_exclude, errors="ignore")   # data to predict has no target    
     return X, y, extras
 
 

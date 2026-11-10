@@ -156,3 +156,51 @@ memorizing. The boosting models were already good with default settings.
 **Best Model:** HistGradientBoosting (0.728), but the five ensembles are within 0.003 of
 each other, much less than the std, so it is a tie. The paired t-test confirms it beats
 logistic regression (p = 0.02), the decision tree and Naive Bayes, but not the other ensembles.
+
+## Week 9 - Beyond COMPAS
+
+Option A: same pipeline, new dataset (Adult income, predict if a person earns more than 50K).
+COMPAS still runs exactly as before.
+
+**Choices in `config_adult.yaml`:** `sex` is the sensitive attribute for the fairness check, and `race`
+is also left out of the features, so the model uses neither. `fnlwgt` is a sampling weight, not a
+characteristic of the person, so it is dropped. `education` is the same as `education_num`, so only
+`education_num` is used. `workclass` and `occupation` get a missingness flag, because people with
+these missing earn > 50K about half as often. `native_country` and `v01`-`v06` are only imputed.
+The 99999 in `capital_gain` is kept, it is the census top code and not an error.
+
+### What broke and how I fixed it
+
+| What broke | Why | Fix |
+|---|---|---|
+| `python main.py` crashed (`KeyError: 'test_set'`) | `config.yaml` was still an old version | updated `config.yaml` |
+| COMPAS rule `age: {min: 18}` | would delete the 74 valid 17-year-olds | Adult has its own validity rules in its config |
+| Predicting `adult_new.csv` crashed (`KeyError: 'income_over_50k'`) | `split_features_target()` assumed the target is always there | `y` is `None` when there is no target |
+| No way to predict new rows | the pipeline only evaluated | `predict` section in the config, `main.py` predicts after the final refit |
+| Fairness report talked about "reoffending" | text was written for COMPAS | generic text (class 0 / class 1) |
+
+Check after cleaning: `workclass`, `occupation` and `native_country` have 379, 381 and 86 missing
+values, and no `"?"` category is left.
+
+### Results
+
+5-fold CV on the development set.
+
+| Model | ROC-AUC | Accuracy | F1 |
+|---|---|---|---|
+| Dummy | 0.500 | 0.761 | 0.000 |
+| Decision tree | 0.731 | 0.803 | 0.590 |
+| Logistic regression | 0.894 | 0.845 | 0.635 |
+| HistGradientBoosting (default) | 0.899 | - | - |
+| **HistGradientBoosting (tuned, nested CV)** | **0.906 ± 0.014** | **0.861 ± 0.010** | **0.669 ± 0.032** |
+| Target | >= 0.90 | >= 0.855 | >= 0.66 |
+
+The tuned HistGradientBoosting reaches all three targets in the same run (max_iter 84,
+learning_rate 0.085, max_leaf_nodes 5, min_samples_leaf 95). All features are kept (no feature
+selection), including the 25 `v` columns. Predictions for the 2,000 people in `adult_new.csv` are in
+`predictions/adult_new_predictions.csv` (id, probability, 0/1 prediction).
+
+The hardest assumption to find was that the data always has a target column, it only broke when
+predicting the new file. Most COMPAS-specific things were in the config, not in the code, so most
+of the work was writing `config_adult.yaml`. Boosting plus tuning is what got the scores over the
+targets. Accuracy alone is misleading here: predicting "<= 50K" for everyone already gets 0.76.
