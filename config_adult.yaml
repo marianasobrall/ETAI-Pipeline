@@ -270,6 +270,7 @@ tuning:
 output:
   results_dir: results_adult
   scoreboard: results_adult/runs.csv
+  model_path: models/adult_model.joblib
 predict:
   path: data/adult_new.csv
   output: predictions/adult_new_predictions.csv

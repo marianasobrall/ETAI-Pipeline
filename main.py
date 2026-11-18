@@ -14,6 +14,7 @@ import os
 import sys
 from datetime import datetime
  
+import joblib
 import optuna
 import pandas as pd
 import yaml
@@ -61,7 +62,7 @@ def main(config_path: str = "config.yaml"):
     scorers = build_scorers(metrics)
     n_jobs = cv_config.get("n_jobs", 1)
     print(f"Model: {model_type}   |   selection metric: {selection_metric}   |   "
-          f"{cv_config['n_splits']}-fold CV")
+          f"{cv_config['n_splits']}-fold CV   |   imputer: {config['preprocessing']['imputation']['numeric_strategy']}")
     print(f"Data:  {len(X_dev)} development rows   |   {len(X_test)} test rows locked away (not used)")
  
     pipeline = build_pipeline(config["preprocessing"], config["model"])
@@ -124,6 +125,7 @@ def main(config_path: str = "config.yaml"):
  
     row = {"run": run, "data": config["data"]["path"], "model": model_type, "tuned": tuning_enabled,
            "encoder": config["preprocessing"]["encoder"], "scaler": config["preprocessing"]["scaler"],
+           "imputer": config["preprocessing"]["imputation"]["numeric_strategy"],
            "params": str(config["model"].get("params")), "tuned_params": str(study.best_params) if tuning_enabled else "",
            "metric": selection_metric, "mean": final_scores["validation"].mean(),
            "std": final_scores["validation"].std(ddof=1), "untuned": untuned, "floor": floor,
@@ -131,7 +133,7 @@ def main(config_path: str = "config.yaml"):
     runs = save_scores(config.get("output", {}).get("scoreboard", "results/runs.csv"), row)
     same = runs[(runs["data"] == row["data"]) & (runs["metric"] == selection_metric)]
     board = (same.sort_values("mean", ascending=False)
-             [["run", "model", "tuned", "encoder", "scaler", "mean", "std", "untuned", "floor"]]
+             [["run", "model", "tuned", "imputer", "mean", "std", "untuned", "floor"]]
              .rename(columns={"mean": selection_metric})
              .to_string(index=False, float_format=lambda v: f"{v:.3f}"))
     print(f"\nScoreboard (runs on the same data and metric; best first)\n{board}")
@@ -140,6 +142,12 @@ def main(config_path: str = "config.yaml"):
     path = save_run(config.get("output", {}).get("results_dir", "results"), run, config, report)
     print(f"\n{refit}\nFull report (per-fold tables, tuning, confusion matrix, fairness): {path}")
  
+    # The final fitted pipeline: what predict.py loads to predict new data.
+    model_path = config.get("output", {}).get("model_path", "models/model.joblib")
+    os.makedirs(os.path.dirname(model_path) or ".", exist_ok=True)
+    joblib.dump(pipeline, model_path)
+    print(f"Model saved to {model_path}")
+
     # Optional: predict new, unlabelled rows with the refit pipeline (same cleaning, no row dropped).
     predict_config = config.get("predict")
     if predict_config:

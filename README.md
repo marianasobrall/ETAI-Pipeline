@@ -204,3 +204,40 @@ The hardest assumption to find was that the data always has a target column, it 
 predicting the new file. Most COMPAS-specific things were in the config, not in the code, so most
 of the work was writing `config_adult.yaml`. Boosting plus tuning is what got the scores over the
 targets. Accuracy alone is misleading here: predicting "<= 50K" for everyone already gets 0.76.
+
+
+
+## Week 10 - Missing values and predicting new data
+
+| Week | Added to the pipeline |
+|---|---|
+| 10 | the numeric imputer is a setting in `config.yaml` (`median`, `mean`, `knn`, `iterative`, `random_forest`); numeric columns are scaled first, then imputed; `main.py` saves the final model; new `predict.py` |
+
+### Missing values
+
+COMPAS, gradient boosting with default params (tuning off), same 5 folds. Each imputer is
+compared with the median using the corrected paired t-test.
+
+| Imputer | ROC-AUC | Difference vs median | p-value |
+|---|---|---|---|
+| median | 0.727 ± 0.015 | - | - |
+| mean | 0.727 ± 0.014 | 0.000 | 0.83 |
+| knn | 0.725 ± 0.015 | -0.001 | 0.02 |
+| iterative (MICE) | 0.726 ± 0.015 | -0.001 | 0.44 |
+| random_forest (missForest) | 0.728 ± 0.013 | +0.001 | 0.52 |
+
+I kept the **median**. No imputer is clearly better: random forest is +0.001 but the test says
+it is noise, and it is the slowest, while KNN is a bit worse (p = 0.02). The other imputers only
+see the 5 numeric columns, which say little about each other, so they can't guess better than the median.
+
+### Predicting new data
+
+```bash
+python main.py                                                # trains and saves models/model.joblib
+python predict.py data/compas_new_people.csv predictions.csv  # predicts with the saved model
+```
+
+`predict.py` loads the saved model, cleans the new file with the same rules as training (without
+dropping any row) and writes `predictions.csv` with `id`, `probability` (of reoffending) and
+`prediction` (0/1 at 0.5). 20 rows in, 20 rows out: the `"?"` and empty values are imputed, the
+unseen charge degree `"X"` doesn't crash, and the person who appears twice gets the same prediction twice.

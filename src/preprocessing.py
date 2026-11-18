@@ -4,7 +4,9 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401  (makes IterativeImputer importable)
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from sklearn.preprocessing import (
     MinMaxScaler, OneHotEncoder, OrdinalEncoder, RobustScaler, StandardScaler, TargetEncoder,
 )
@@ -101,6 +103,21 @@ _SCALERS = {
 }
 
 
+# Numeric imputers. "iterative" is MICE with one completed dataset; "random_forest" is the
+# missForest idea (each column predicted from the others by a random forest). They learn only
+# from the feature columns, never from the target, so they also run on data to predict.
+_NUMERIC_IMPUTERS = {
+    "median": lambda cfg, seed: SimpleImputer(strategy="median"),
+    "mean": lambda cfg, seed: SimpleImputer(strategy="mean"),
+    "knn": lambda cfg, seed: KNNImputer(n_neighbors=cfg.get("n_neighbors", 5)),
+    "iterative": lambda cfg, seed: IterativeImputer(max_iter=cfg.get("max_iter", 10), random_state=seed),
+    "random_forest": lambda cfg, seed: IterativeImputer(
+        estimator=RandomForestRegressor(n_estimators=cfg.get("n_estimators", 50), min_samples_leaf=5,
+                                        random_state=seed, n_jobs=-1),
+        max_iter=cfg.get("max_iter", 10), random_state=seed),
+}
+
+
 def _build_encoder(name: str, random_state=None):
     if name == "onehot":
         return OneHotEncoder(handle_unknown="ignore", drop="first")
@@ -125,9 +142,14 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
         raise ValueError(f"Unknown scaler: {scaler_name}. Options: {list(_SCALERS)}")
     scaler = _SCALERS[scaler_name]
 
-    numeric_steps = [("impute", SimpleImputer(strategy=numeric_strategy))]
-    if scaler is not None:
-        numeric_steps.append(("scale", scaler()))
+    if numeric_strategy not in _NUMERIC_IMPUTERS:
+        raise ValueError(f"Unknown numeric_strategy: {numeric_strategy}. Options: {list(_NUMERIC_IMPUTERS)}")
+
+    # scale first, then impute: KNN measures distances, so every column must be on one scale
+    # (the scalers ignore gaps when they learn the scale)
+    numeric_steps = [("scale", scaler())] if scaler is not None else []
+    numeric_steps.append(("impute", _NUMERIC_IMPUTERS[numeric_strategy](
+        preprocessing_config["imputation"], preprocessing_config.get("random_state"))))
     categorical_pipeline = Pipeline([
         ("impute", SimpleImputer(strategy=categorical_strategy)),
         ("encode", _build_encoder(preprocessing_config.get("encoder", "onehot"),
