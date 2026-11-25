@@ -10,7 +10,7 @@ from sklearn.ensemble import (
     HistGradientBoostingClassifier, RandomForestClassifier,
 )
 
-from src.preprocessing import build_preprocessor
+from src.preprocessing import AnomalyScore, build_preprocessor
 
 
 def oblique_random_forest(n_estimators: int = 100, n_components: int = 10, density="auto",
@@ -54,9 +54,15 @@ def build_model(model_config: dict):
     return _MODELS[model_type](**params)
 
 
-def build_pipeline(preprocessing_config: dict, model_config: dict) -> Pipeline:
-    """Preprocessing + model in one Pipeline, so CV refits the preprocessing on every fold."""
-    return Pipeline([
-        ("prep", build_preprocessor(preprocessing_config)),
-        ("model", build_model(model_config)),
-    ])
+def build_pipeline(preprocessing_config: dict, model_config: dict, anomaly_config: dict = None) -> Pipeline:
+    """
+    Preprocessing, the anomaly score (if `anomaly_config["method"]` is not "none") and model in
+    one Pipeline, so CV refits every learned step on the training part of each fold.
+    """
+    steps = [("prep", build_preprocessor(preprocessing_config))]
+    if anomaly_config and anomaly_config.get("method", "none") != "none":
+        steps.append(("anomaly", AnomalyScore(method=anomaly_config["method"],
+                                              n_neighbors=anomaly_config.get("n_neighbors", 20),
+                                              random_state=anomaly_config.get("random_state"))))
+    steps.append(("model", build_model(model_config)))
+    return Pipeline(steps)

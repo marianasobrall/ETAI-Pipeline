@@ -241,3 +241,39 @@ python predict.py data/compas_new_people.csv predictions.csv  # predicts with th
 dropping any row) and writes `predictions.csv` with `id`, `probability` (of reoffending) and
 `prediction` (0/1 at 0.5). 20 rows in, 20 rows out: the `"?"` and empty values are imputed, the
 unseen charge degree `"X"` doesn't crash, and the person who appears twice gets the same prediction twice.
+## Week 11 - Outliers
+
+| Week | Added to the pipeline |
+|---|---|
+| 11 | new `AnomalyScore` step (Isolation Forest or LOF) that adds how unusual each person is as one more feature; set with `anomaly.method` in `config.yaml` (`none` by default); the method is in the scoreboard and the report |
+
+**My guess (before running):** the anomaly score will not help. The people who stand out are the
+ones with many priors or many juvenile records, and the model already sees those columns.
+
+### Are the unusual people the ones who reoffend?
+
+Top 5% most unusual people in the development set, compared with everyone else:
+
+| Method | Reoffend, top 5% | Reoffend, rest |
+|---|---|---|
+| Isolation Forest | 0.583 | 0.444 |
+| LOF | 0.473 | 0.450 |
+
+The people Isolation Forest flags do reoffend more, because they are the ones with long records.
+LOF's outliers are almost like everyone else.
+
+### Results
+
+COMPAS, gradient boosting with default params (tuning off), same 5 folds. Compared with `none`
+using the corrected paired t-test.
+
+| Anomaly method | ROC-AUC | Difference vs none | p-value |
+|---|---|---|---|
+| none | 0.727 ± 0.015 | - | - |
+| isolation_forest | 0.724 ± 0.014 | -0.003 | 0.25 |
+| lof | 0.725 ± 0.014 | -0.002 | 0.43 |
+
+My guess was right: neither score helps, both are a bit lower but within noise. Isolation Forest
+finds people who reoffend more, but only because of their priors and juvenile counts, which the
+model already uses, so the score adds nothing new. I kept `method: "none"`.
+`predict.py` still returns 20 rows for `data/compas_new_people.csv`.

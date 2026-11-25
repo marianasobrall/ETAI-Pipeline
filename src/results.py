@@ -21,6 +21,7 @@ def save_run(results_dir: str, run: str, config: dict, report_text: str) -> str:
         f"Run: {run}\n"
         f"Model: {config['model']['type']}  params={config['model'].get('params')}\n"
         f"Numeric imputer: {config['preprocessing']['imputation']['numeric_strategy']}\n"
+        f"Anomaly score: {(config.get('anomaly') or {}).get('method', 'none')}\n"
         f"Test set: size {config['test_set']['size']}  random_state {config['test_set']['random_state']}"
         "  (locked, not used)\n"
         + "=" * 60 + "\n\n"

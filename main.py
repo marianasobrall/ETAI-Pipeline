@@ -62,10 +62,12 @@ def main(config_path: str = "config.yaml"):
     scorers = build_scorers(metrics)
     n_jobs = cv_config.get("n_jobs", 1)
     print(f"Model: {model_type}   |   selection metric: {selection_metric}   |   "
-          f"{cv_config['n_splits']}-fold CV   |   imputer: {config['preprocessing']['imputation']['numeric_strategy']}")
+          f"{cv_config['n_splits']}-fold CV   |   imputer: {config['preprocessing']['imputation']['numeric_strategy']}"
+          f"   |   anomaly: {(config.get('anomaly') or {}).get('method', 'none')}")
     print(f"Data:  {len(X_dev)} development rows   |   {len(X_test)} test rows locked away (not used)")
  
-    pipeline = build_pipeline(config["preprocessing"], config["model"])
+    anomaly_method = (config.get("anomaly") or {}).get("method", "none")
+    pipeline = build_pipeline(config["preprocessing"], config["model"], config.get("anomaly"))
     floor_pipeline = build_pipeline(config["preprocessing"], {"type": "dummy"})
     floor_scores, _ = cross_validate_pipeline(floor_pipeline, X_dev, y_dev, cv,
                                               {selection_metric: scorers[selection_metric]}, selection_metric, n_jobs)
@@ -125,7 +127,7 @@ def main(config_path: str = "config.yaml"):
  
     row = {"run": run, "data": config["data"]["path"], "model": model_type, "tuned": tuning_enabled,
            "encoder": config["preprocessing"]["encoder"], "scaler": config["preprocessing"]["scaler"],
-           "imputer": config["preprocessing"]["imputation"]["numeric_strategy"],
+           "imputer": config["preprocessing"]["imputation"]["numeric_strategy"], "anomaly": anomaly_method,
            "params": str(config["model"].get("params")), "tuned_params": str(study.best_params) if tuning_enabled else "",
            "metric": selection_metric, "mean": final_scores["validation"].mean(),
            "std": final_scores["validation"].std(ddof=1), "untuned": untuned, "floor": floor,
@@ -133,7 +135,7 @@ def main(config_path: str = "config.yaml"):
     runs = save_scores(config.get("output", {}).get("scoreboard", "results/runs.csv"), row)
     same = runs[(runs["data"] == row["data"]) & (runs["metric"] == selection_metric)]
     board = (same.sort_values("mean", ascending=False)
-             [["run", "model", "tuned", "imputer", "mean", "std", "untuned", "floor"]]
+             [["run", "model", "tuned", "imputer", "anomaly", "mean", "std", "untuned", "floor"]]
              .rename(columns={"mean": selection_metric})
              .to_string(index=False, float_format=lambda v: f"{v:.3f}"))
     print(f"\nScoreboard (runs on the same data and metric; best first)\n{board}")
